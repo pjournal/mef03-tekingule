@@ -6,3 +6,5 @@ You can easily watch the progress of my BDA 503 lesson here.
 
 [R MarkDown Assigment Home Work](https://pjournal.github.io/mef03-tekingule/assignment_1_knit.html)
 
+### BKM
+[BKM Assigment Home Work](Homework BKM.html)
