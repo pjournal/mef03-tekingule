@@ -8,3 +8,6 @@ You can easily watch the progress of my BDA 503 lesson here.
 
 ### BKM
 [BKM Assigment HomeWork](BKM_homework.html)
+
+### Join Assignment
+[Join Assignment](join_assignments.html)
