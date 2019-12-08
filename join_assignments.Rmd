@@ -1,0 +1,91 @@
+---
+title: "Join Assignment"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(rvest)
+library(xml2)
+```
+
+
+This chapter is about Joins.
+WE load Tennis data in order to analysis this dataset;
+```{r}
+tennis_data <- load("~/atp_tennis_data_2017.RData")
+```
+
+
+### 1-Rank countries (flag cides) by the number of singles champions
+We join two dataframes with player_id and singles_winner_player_id coloumns in order to get winner players. 
+```{r}
+tennis_lj<-left_join(tourney_df, player_df,by = c("singles_winner_player_id"="player_id"))
+```
+
+First solution of this one:
+```{r cars}
+tennis_lj_sum <-
+  tennis_lj %>%
+  count(flag_code,sort=TRUE)
+```
+
+Other solution of this one:
+```{r}
+tennis_lj_sum <-
+  tennis_lj %>%
+  group_by(flag_code) %>%
+  summarise(total_win = n()) %>%
+  arrange(desc(total_win))
+```
+
+### 2-Rank countries which did not get any singles championships by the games won when they win the match
+In this analysis we have to find the non-champion players using anti-join
+```{r}
+nonchamp_players <-
+  player_df %>% select(player_id,flag_code)%>% anti_join(.,tennis_lj_sum)
+```
+
+So the Data set ready we now have to write the SQL in order to fulfill the reqirement.
+```{r}
+nonchamp_players %>% left_join(.,score_df,by=c("player_id"="winner_player_id")) %>%
+  group_by(flag_code) %>% summarise(total_won=sum(winner_games_won,na.rm=TRUE)) %>%arrange(desc(total_won))
+```
+
+### 3-Final Winners
+```{r}
+final_winners <-
+  inner_join(player_df,score_df,by=c("player_id"="winner_player_id")) %>%
+  filter(tourney_round_name=="Finals") %>%
+  group_by(player_slug) %>%
+  summarise(final_count = n()) %>%
+  arrange(desc(final_count))
+
+final_winners
+```
+
+### 4-Final Losers 
+```{r}
+final_losers <- 
+  inner_join(player_df,score_df,by=c("player_id"="loser_player_id")) %>%
+  filter(tourney_round_name=="Finals") %>%
+  group_by(player_slug) %>%
+  summarise(final_count = n()) %>%
+  arrange(desc(final_count))
+
+final_losers
+```
+
+### 5-Most Final Played Players
+I merge the Final winners and final losers datasets to analysis the Most Final Played Players.  
+```{r}
+merge_losers_winners <-
+rbind(final_losers,final_winners)
+
+merge_losers_winners%>%
+  group_by(player_slug) %>%
+  summarise(total_finals=sum(final_count,na.rm=TRUE)) %>%
+  arrange(desc(total_finals))  
+```
+
