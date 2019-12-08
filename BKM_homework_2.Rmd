@@ -1,0 +1,138 @@
+---
+title: "BKM Assignment"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(rvest)
+library(xml2)
+library(sqldf)
+library(reshape2)
+library(ggplot2)
+library(dplyr)
+```
+This chapter is about BKM Assigment.
+
+### 1 - Data Preparation 
+The Interbank Card Center (BKM) was established in 1990 with the partnership of 13 public and private Turkish banks for the purpose of providing solutions to the common problems and developing the rules and standards of credit and debit cards in Turkey, within the card payment system.
+
+The dataset we used in this analysis from BKM includes number and volume of transactions made with credit card and debit card with respect to merchandise category group in Turkey.
+
+```{r cars , warning=FALSE, message=FALSE}
+# Creating a function to filter year and month on the URL
+
+FuncYearMonth <- 
+  function(year,month) {
+    url <- paste('https://bkm.com.tr/en/secilen-aya-ait-sektorel-gelisim/?filter_year=',year,'&filter_month=',month,'&List=Lis'
+                 ,sep=''
+                 ,collapse = NULL)
+  return(url)
+  }
+
+list_all <- c('201701','201702','201703','201704','201705','201706','201707','201708','201709','201710','201711','201712','201801','201802','201803','201804','201805','201806','201807','201808','201809','201810','201811','201812','201901','201902','201903','201904','201905','201906')
+
+raw_df_full <- ''
+for (i in 1:length(list_all)) {
+v_year = substr(list_all[i],1,4)
+v_month = substr(list_all[i],5,6)
+
+    url<-FuncYearMonth(v_year,v_month)
+    
+    page <- read_html(url)
+    
+    raw_df <- 
+      page %>%
+      html_nodes("table") %>%.[(4)] %>% 
+      html_table(page, fill = TRUE,header = FALSE) %>% 
+      as.data.frame() %>%
+      slice(3:max(nrow(.)))  
+    
+    # Replacing N/A values with 0 and adding year and month columns
+    raw_df <- 
+      raw_df %>% 
+      mutate_if(is.numeric,funs(ifelse(is.na(.),0,.))) %>%  
+      mutate(year = v_year,month = v_month)
+    
+    # Appending raw_df into raw_df_full in each iteration
+    raw_df_full<-rbind(raw_df_full,raw_df)
+}
+
+
+# Adding column names
+colnames(raw_df_full) <- c('merchant_category','cc_transaction_count','dc_transaction_count','cc_transaction_amount','dc_transaction_amount','year','month')
+
+raw_df_full <- raw_df_full %>% slice(-c(1))
+```
+
+
+### 2 - Analysis : Most DebitCard Spends of 3 Months of Every Year vs CreditCard Spends
+This Analysis is about most debitcard spends 3 months of every year and compare same months creditcard spends.
+
+```{r cars2, warning=FALSE, message=FALSE}
+# Most DebitCard Spends of 3 Months of Every Year
+df_dbtcard <-
+  raw_df_full %>% 
+    select(year,month,dc_transaction_amount,cc_transaction_amount,dc_transaction_count,cc_transaction_count) %>%
+    group_by(year,month) %>%
+    summarise(debitcard_spend = sum(as.numeric((gsub(",","",dc_transaction_amount))),na.rm = T),
+            creditcard_spend = sum(as.numeric((gsub(",","",cc_transaction_amount))),na.rm = T)
+    ) %>%
+    arrange(desc(debitcard_spend)) %>%
+    mutate(rwn =row_number()) %>%
+    filter(rwn<=3)
+
+df_dbtcard
+```
+
+
+```{r cars3, warning=FALSE, message=FALSE}
+df_dbtcard_pivot <- melt(df_dbtcard, id.vars = c("year" , "month"), 
+                                    measure.vars = c("debitcard_spend", "creditcard_spend"))
+
+
+ggplot(data = df_dbtcard_pivot, aes(x = paste(year,month) , y = value/1000 , group = variable)) + 
+  #ggtitle("Plot of length \n by dose") + xlab("Dose (mg)") + ylab("Teeth length")
+  geom_bar(aes(fill = paste(year,month)),stat = "identity") + scale_fill_hue() + theme(axis.text.x = element_text(angle = 30, hjust = 1))+
+  #geom_bar(aes(fill = factor(..x.., labels = "paste(year,month)")), stat = "identity") + 
+  labs(fill = "Year Month") + 
+  facet_grid(~ variable) +
+  scale_y_continuous("Spend(k)") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) 
+  
+```
+
+### 3 - Analysis : Average Spent of Card Types
+Yearly averages of the card types.
+
+```{r cars4 , warning=FALSE, message=FALSE}
+# Average Spent of Card Types
+df_avg_spent <-
+  raw_df_full %>% 
+    select(year,dc_transaction_amount,cc_transaction_amount,dc_transaction_count,cc_transaction_count) %>%
+    group_by(year) %>%
+    summarise(debitcard_avg_spend = sum(as.numeric((gsub(",","",dc_transaction_amount))),na.rm=T)/sum(as.numeric((gsub(",","",dc_transaction_count))),na.rm = T),
+     creditcard_avg_spend = sum(as.numeric((gsub(",","",cc_transaction_amount))),na.rm = T)/sum(as.numeric((gsub(",","",cc_transaction_count))),na.rm = T)
+    )%>%
+    arrange(desc(year)) %>%
+    mutate(rwn =row_number()) %>%
+    filter(rwn<=3)
+   
+```
+
+```{r}
+df_avg_spent_pivot <- melt(df_avg_spent, id.vars = c("year"), 
+                                    measure.vars = c("debitcard_avg_spend", "creditcard_avg_spend"))
+
+
+ggplot(data = df_avg_spent_pivot, aes(x = year , y = value , group = variable)) + 
+  #ggtitle("Plot of length \n by dose") + xlab("Dose (mg)") + ylab("Teeth length")
+  geom_bar(aes(fill = year),stat = "identity") + scale_fill_hue() + theme(axis.text.x = element_text(angle = 30, hjust = 1))+
+  #geom_bar(aes(fill = factor(..x.., labels = "year")), stat = "identity") + 
+  labs(fill = "Year") + 
+  facet_grid(~ variable) +
+  scale_y_continuous("Spend") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) 
+```
+
